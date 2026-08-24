@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="EMPTY_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
+      <excludeFolder url="file://$MODULE_DIR$/.project-mentor" />
+      <excludeFolder url="file://$MODULE_DIR$/.rustdoc-axum-0.8.9" />
+      <excludeFolder url="file://$MODULE_DIR$/.rustdoc-axum-0.8.9/axum" />
+      <excludeFolder url="file://$MODULE_DIR$/.rustdoc-axum-0.8.9/search.index" />
+      <excludeFolder url="file://$MODULE_DIR$/.rustdoc-axum-0.8.9/src" />
+      <excludeFolder url="file://$MODULE_DIR$/.rustdoc-axum-0.8.9/trait.impl" />
+      <excludeFolder url="file://$MODULE_DIR$/.rustdoc-axum-0.8.9/type.impl" />
+      <excludeFolder url="file://$MODULE_DIR$/target" />
+      <excludeFolder url="file://$MODULE_DIR$/admin" />
+      <excludeFolder url="file://$MODULE_DIR$/test" />
+    </content>
+    <orderEntry type="inheritedJdk" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>
