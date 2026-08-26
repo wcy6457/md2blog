@@ -29,17 +29,15 @@ async fn main() {
         match TcpListener::bind("0.0.0.0:2233").await {
             Ok(l) => l,
             Err(e) => {
-                println!("发生了错误：{}", e.kind());
-                exit(2);
+                eprintln!("发生了错误：{}", e.kind());
+                exit(1);
             }
         },
         Router::new().route(
             "/test/hello-world",
             get(move || async move { temp1.lock().await.get_response(StatusCode::OK) }),
         ),
-    )
-        .await
-        .unwrap();
+    ).await.unwrap();
 }
 
 async fn commandline_handler(temp: Arc<Mutex<Test<'_>>>) {
@@ -55,6 +53,7 @@ async fn commandline_handler(temp: Arc<Mutex<Test<'_>>>) {
 
         // println!("输入了{}", input);
         if input == "reload" {
+            println!("reloading......");
             temp.lock().await.update_html();
         }
         if input == "exit" {

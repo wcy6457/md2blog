@@ -17,10 +17,19 @@ impl<'a> Test<'a> {
     }
 
     pub fn update_html(&mut self) {
-        self.html = md_file_path_to_html(self.path);
+        //self.html = md_file_path_to_html(self.path);
+        match md_file_path_to_html(self.path) {
+            Ok(html) => {
+                self.html = Ok(html);
+                println!("reloading completed!");
+            }
+            Err((_, err)) => {
+                eprintln!("In reload: rebuild html: {}", err);
+            }
+        }
     }
 
-    
+
     /**
     status_code - 状态码，诸如404，500，200一类
 
