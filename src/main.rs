@@ -2,10 +2,8 @@ pub mod test;
 pub mod manager;
 
 use crate::manager::FileManager;
-use crate::test::Test;
 use axum::http::StatusCode;
 use comrak::{markdown_to_html, Options};
-use glob::glob;
 use std::fs::read_to_string;
 use std::path::Path;
 use std::process::exit;
@@ -21,7 +19,7 @@ async fn main() {
     // // let temp1 = Arc::clone(&test);
     // // let temp2 = Arc::clone(&test);
 
-    let file_manager = Arc::new(Mutex::new(FileManager::default()));
+    let file_manager = FileManager::init().await;
     // let tcp_listener = match TcpListener::bind("0.0.0.0:2233").await {
     //     Ok(l) => l,
     //     Err(e) => {
@@ -31,33 +29,8 @@ async fn main() {
     // };
 
 
-    for entry in glob("test/*.md").expect("Failed to read glob pattern") {
-        match entry {
-            Ok(path) => {
-                let path = match path.into_string() {
-                    Ok(s) => {
-                        s
-                    }
-                    Err(e) => {
-                        println!("搜寻文件将路径转换为String时出错：{:?}", e);
-                        String::new()
-                    }
-                };
-                let path = Arc::new(path.replace('\\', "/"));
-                let path1 = Arc::clone(&path);
-                let path2 = Arc::clone(&path);
-                let path3 = Arc::clone(&path);
-                file_manager.lock().await.add(path1, Arc::new(Mutex::new(Test::new(path2, md_file_path_to_html(path3))))).await;
-            }
-            Err(e) => {
-                println!("{:?}", e);
-                exit(1);
-            }
-        }
-    }
-
     tokio::spawn(commandline_handler(Arc::clone(&file_manager)));
-    FileManager::run_server(file_manager).await;
+    FileManager::run_server(Arc::clone(&file_manager)).await
 
     // axum::serve(
     //     match TcpListener::bind("0.0.0.0:2233").await {
@@ -75,25 +48,35 @@ async fn main() {
 }
 
 async fn commandline_handler(file_manager: Arc<Mutex<FileManager>>) {
+    let mut input = String::new();
     loop {
-        let mut input = String::new();
         let mut stdin = BufReader::new(io::stdin());
-
         stdin.read_line(&mut input).await.unwrap_or_else(|e| {
             println!("{}", e);
             0
         });
-        let input = input.trim_end();
+        let temp = input.trim_end();
 
         // println!("输入了{}", input);
-        if let Some(path) = input.strip_prefix("reload ") {
-            println!("reloading......");
-            file_manager.lock().await.update_html(path.trim()).await;
-        } else {}
-        if input == "exit" {
+        if temp.starts_with("reload ") {
+            let temp = match temp.strip_prefix("reload ") {
+                Some(temp) => {
+                    temp
+                }
+                None => {
+                    temp
+                }
+            };
+            Arc::clone(&file_manager).lock().await.update_html(temp.trim()).await;
+        } else if temp == "refresh" {
+            Arc::clone(&file_manager).lock().await.refresh().await;
+        } else if temp == "exit" {
             println!("stop~");
             exit(0);
+        } else {
+            println!("杂鱼，这点指令都输不对~");
         }
+        input.clear();
     }
 }
 

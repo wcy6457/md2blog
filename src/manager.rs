@@ -1,8 +1,10 @@
+use crate::md_file_path_to_html;
 use crate::test::Test;
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Response, StatusCode, Uri};
 use axum::Router;
+use glob::glob;
 use std::collections::HashMap;
 use std::fmt::format;
 use std::process::exit;
@@ -14,18 +16,50 @@ pub struct FileManager {
     file_list: Arc<Mutex<HashMap<Arc<String>, Arc<Mutex<Test>>>>>,
 }
 
-impl Default for FileManager {
-    fn default() -> Self {
+impl FileManager {
+    pub async fn init() -> Arc<Mutex<FileManager>> {
         let map = HashMap::new();
         let map = Arc::new(Mutex::new(map));
-        FileManager {
-            file_list: map
+        let temp = Arc::new(Mutex::new(FileManager { file_list: map }));
+        let temp = Arc::clone(&temp);
+        temp.lock().await.load_test_file().await;
+        temp
+    }
+
+    pub async fn refresh(&self) {
+        self.file_list.lock().await.clear();
+        self.load_test_file().await;
+        println!("refresh finished~")
+    }
+
+    async fn load_test_file(&self) {
+        for entry in glob("test/*.md").expect("Failed to read glob pattern") {
+            match entry {
+                Ok(path) => {
+                    let path = match path.into_string() {
+                        Ok(s) => {
+                            s
+                        }
+                        Err(e) => {
+                            println!("搜寻文件将路径转换为String时出错：{:?}", e);
+                            String::new()
+                        }
+                    };
+                    let path = Arc::new(path.replace('\\', "/"));
+                    let path1 = Arc::clone(&path);
+                    let path2 = Arc::clone(&path);
+                    let path3 = Arc::clone(&path);
+                    self.file_list.lock().await.insert(path1, Arc::new(Mutex::new(Test::new(path2, md_file_path_to_html(path3)))));
+                }
+                Err(e) => {
+                    println!("{:?}", e);
+                    exit(1);
+                }
+            }
         }
     }
-}
 
-impl FileManager {
-    pub async fn add(&mut self, path: Arc<String>, point: Arc<Mutex<Test>>) {
+    pub async fn add(&self, path: Arc<String>, point: Arc<Mutex<Test>>) {
         self.file_list.lock().await.insert(path, point);
     }
 
@@ -34,7 +68,7 @@ impl FileManager {
         let file = self.file_list.lock().await.get(&path).cloned();
         match file {
             Some(file) => file.lock().await.update_html(),
-            None => eprintln!("In reload: file not found: {}", path),
+            None => eprintln!("In reload: file not found or file not md: {} , or maybe you need \"refresh\"", path),
         }
     }
 
