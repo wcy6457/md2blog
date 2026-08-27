@@ -21,7 +21,7 @@ async fn main() {
     // // let temp1 = Arc::clone(&test);
     // // let temp2 = Arc::clone(&test);
 
-    let mut file_manager = FileManager::new();
+    let file_manager = Arc::new(Mutex::new(FileManager::default()));
     // let tcp_listener = match TcpListener::bind("0.0.0.0:2233").await {
     //     Ok(l) => l,
     //     Err(e) => {
@@ -43,11 +43,11 @@ async fn main() {
                         String::new()
                     }
                 };
-                let path = Arc::new(path);
+                let path = Arc::new(path.replace('\\', "/"));
                 let path1 = Arc::clone(&path);
                 let path2 = Arc::clone(&path);
                 let path3 = Arc::clone(&path);
-                file_manager.add(path1, Arc::new(Mutex::new(Test::new(path2, md_file_path_to_html(path3))))).await;
+                file_manager.lock().await.add(path1, Arc::new(Mutex::new(Test::new(path2, md_file_path_to_html(path3))))).await;
             }
             Err(e) => {
                 println!("{:?}", e);
@@ -56,8 +56,8 @@ async fn main() {
         }
     }
 
-
-    // tokio::spawn(commandline_handler());
+    tokio::spawn(commandline_handler(Arc::clone(&file_manager)));
+    FileManager::run_server(file_manager).await;
 
     // axum::serve(
     //     match TcpListener::bind("0.0.0.0:2233").await {
@@ -74,7 +74,7 @@ async fn main() {
     // ).await.unwrap();
 }
 
-async fn commandline_handler(temp: Arc<Mutex<Test>>) {
+async fn commandline_handler(file_manager: Arc<Mutex<FileManager>>) {
     loop {
         let mut input = String::new();
         let mut stdin = BufReader::new(io::stdin());
@@ -86,10 +86,10 @@ async fn commandline_handler(temp: Arc<Mutex<Test>>) {
         let input = input.trim_end();
 
         // println!("输入了{}", input);
-        if input == "reload" {
+        if let Some(path) = input.strip_prefix("reload ") {
             println!("reloading......");
-            temp.lock().await.update_html();
-        }
+            file_manager.lock().await.update_html(path.trim()).await;
+        } else {}
         if input == "exit" {
             println!("stop~");
             exit(0);

@@ -58,7 +58,7 @@ impl Test {
         Response::builder()
             .status(StatusCode::INTERNAL_SERVER_ERROR)
             .header("content-type", "text/html; charset=utf-8")
-            .body(Body::from(r#"<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"></head><body><h3>500_内部服务器错误</h3></body></html>"#))
+            .body(Body::from(r#"<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"></head><body><h3>500_未知的服务器错误</h3></body></html>"#))
             .unwrap()
     }
 
