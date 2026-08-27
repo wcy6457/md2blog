@@ -2,14 +2,14 @@ use crate::md_file_path_to_html;
 use axum::body::Body;
 use axum::http::StatusCode;
 use axum::response::Response;
-use std::path::Path;
+use std::sync::Arc;
 
-pub struct Test<'a> {
-    path: &'a Path,
+pub struct Test {
+    path: Arc<String>,
     html: Result<String, (StatusCode, String)>,
 }
-impl<'a> Test<'a> {
-    pub fn new(path: &'a Path, html: Result<String, (StatusCode, String)>) -> Test<'a> {
+impl Test {
+    pub fn new(path: Arc<String>, html: Result<String, (StatusCode, String)>) -> Test {
         Test {
             path,
             html,
@@ -18,7 +18,7 @@ impl<'a> Test<'a> {
 
     pub fn update_html(&mut self) {
         //self.html = md_file_path_to_html(self.path);
-        match md_file_path_to_html(self.path) {
+        match md_file_path_to_html(self.path.clone()) {
             Ok(html) => {
                 self.html = Ok(html);
                 println!("reloading completed!");
@@ -29,7 +29,6 @@ impl<'a> Test<'a> {
         }
     }
 
-
     /**
     status_code - 状态码，诸如404，500，200一类
 
@@ -38,28 +37,36 @@ impl<'a> Test<'a> {
     &nbsp;&nbsp;&nbsp;&nbsp;Y：StatusCode<p>
     调用中若产生错误会直接返回500的错误响应
     */
-    pub fn get_response(&self, hope_status_code: StatusCode) -> Response {
+    pub fn build_response(&self, hope_status_code: StatusCode) -> Response {
         match &self.html {
             Ok(s) => {
                 Response::builder()
                     .status(hope_status_code)
                     .header("content-type", "text/html; charset=utf-8")
-                    .body(Body::from(s.to_string())).unwrap_or(Self::get_500_response())
+                    .body(Body::from(s.to_string())).unwrap_or(Self::build_500_response())
             }
             Err((code, reason)) => {
                 Response::builder()
                     .status(code)
                     .header("content-type", "text/html; charset=utf-8")
-                    .body(Body::from(reason.to_string())).unwrap_or(Self::get_500_response())
+                    .body(Body::from(reason.to_string())).unwrap_or(Self::build_500_response())
             }
         }
     }
 
-    fn get_500_response() -> Response {
+    fn build_500_response() -> Response {
         Response::builder()
             .status(StatusCode::INTERNAL_SERVER_ERROR)
             .header("content-type", "text/html; charset=utf-8")
-            .body(Body::from(r#"<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"></head><body><h1>500_内部服务器错误</h1></body></html>"#))
+            .body(Body::from(r#"<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"></head><body><h3>500_内部服务器错误</h3></body></html>"#))
+            .unwrap()
+    }
+
+    pub fn build_404_response() -> Response {
+        Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .header("content-type", "text/html; charset=utf-8")
+            .body(Body::from(r#"<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"></head><body><h3>404_没有这个页面</h3></body></html>"#))
             .unwrap()
     }
 }

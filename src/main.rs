@@ -1,46 +1,80 @@
 pub mod test;
+pub mod manager;
 
+use crate::manager::FileManager;
 use crate::test::Test;
 use axum::http::StatusCode;
-use axum::routing::get;
-use axum::Router;
 use comrak::{markdown_to_html, Options};
+use glob::glob;
 use std::fs::read_to_string;
 use std::path::Path;
 use std::process::exit;
 use std::sync::Arc;
 use tokio::io;
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
 #[tokio::main]
 async fn main() {
-    let path = Path::new("test/hello-world.md");
-    let test = Arc::new(Mutex::new(Test::new(path, md_file_path_to_html(path))));
-    let temp1 = Arc::clone(&test);
-    let temp2 = Arc::clone(&test);
+    // let path = Path::new("test/hello-world.md");
+    // let test = Arc::new(Mutex::new(Test::new(path, md_file_path_to_html(path))));
+    // // let temp1 = Arc::clone(&test);
+    // // let temp2 = Arc::clone(&test);
+
+    let mut file_manager = FileManager::new();
+    // let tcp_listener = match TcpListener::bind("0.0.0.0:2233").await {
+    //     Ok(l) => l,
+    //     Err(e) => {
+    //         eprintln!("发生了错误：{}", e.kind());
+    //         exit(1);
+    //     }
+    // };
 
 
-    tokio::spawn(commandline_handler(temp2));
-
-    println!("服务器开始监听2233端口，测试页在：localhost:2233/test/hello-world");
-    axum::serve(
-        match TcpListener::bind("0.0.0.0:2233").await {
-            Ok(l) => l,
+    for entry in glob("test/*.md").expect("Failed to read glob pattern") {
+        match entry {
+            Ok(path) => {
+                let path = match path.into_string() {
+                    Ok(s) => {
+                        s
+                    }
+                    Err(e) => {
+                        println!("搜寻文件将路径转换为String时出错：{:?}", e);
+                        String::new()
+                    }
+                };
+                let path = Arc::new(path);
+                let path1 = Arc::clone(&path);
+                let path2 = Arc::clone(&path);
+                let path3 = Arc::clone(&path);
+                file_manager.add(path1, Arc::new(Mutex::new(Test::new(path2, md_file_path_to_html(path3))))).await;
+            }
             Err(e) => {
-                eprintln!("发生了错误：{}", e.kind());
+                println!("{:?}", e);
                 exit(1);
             }
-        },
-        Router::new().route(
-            "/test/hello-world",
-            get(move || async move { temp1.lock().await.get_response(StatusCode::OK) }),
-        ),
-    ).await.unwrap();
+        }
+    }
+
+
+    // tokio::spawn(commandline_handler());
+
+    // axum::serve(
+    //     match TcpListener::bind("0.0.0.0:2233").await {
+    //         Ok(l) => l,
+    //         Err(e) => {
+    //             eprintln!("发生了错误：{}", e.kind());
+    //             exit(1);
+    //         }
+    //     },
+    //     Router::new().route(
+    //         "/test/hello-world",
+    //         get(move || async move { temp1.lock().await.build_response(StatusCode::OK) }),
+    //     ),
+    // ).await.unwrap();
 }
 
-async fn commandline_handler(temp: Arc<Mutex<Test<'_>>>) {
+async fn commandline_handler(temp: Arc<Mutex<Test>>) {
     loop {
         let mut input = String::new();
         let mut stdin = BufReader::new(io::stdin());
@@ -63,8 +97,8 @@ async fn commandline_handler(temp: Arc<Mutex<Test<'_>>>) {
     }
 }
 
-fn md_file_path_to_html(path: &Path) -> Result<String, (StatusCode, String)> {
-    match read_to_string(path) {
+fn md_file_path_to_html(path: Arc<String>) -> Result<String, (StatusCode, String)> {
+    match read_to_string(Path::new(&*path)) {
         Ok(s) => Ok(format!(
             r#"<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"></head><body>{}</body></html>"#,
             markdown_to_html(s.as_str(), &Options::default())
