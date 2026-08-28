@@ -83,7 +83,7 @@ async fn commandline_handler(file_manager: Arc<Mutex<FileManager>>) {
 fn md_file_path_to_html(path: Arc<String>) -> Result<String, (StatusCode, String)> {
     match read_to_string(Path::new(&*path)) {
         Ok(s) => Ok(format!(
-            r#"<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"></head><body>{}</body></html>"#,
+            r#"<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/test/style.css"></head><body><main class="markdown-body">{}</main></body></html>"#,
             markdown_to_html(s.as_str(), &Options::default())
         )),
         Err(e) => {

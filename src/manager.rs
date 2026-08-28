@@ -1,12 +1,14 @@
 use crate::md_file_path_to_html;
 use crate::test::Test;
-use axum::body::Body;
+use axum::body::{Body, Bytes};
 use axum::extract::State;
 use axum::http::{Response, StatusCode, Uri};
+use axum::routing::get;
 use axum::Router;
 use glob::glob;
 use std::collections::HashMap;
 use std::fmt::format;
+use std::fs::read_to_string;
 use std::process::exit;
 use std::sync::Arc;
 use tokio::net::TcpListener;
@@ -14,13 +16,21 @@ use tokio::sync::Mutex;
 
 pub struct FileManager {
     file_list: Arc<Mutex<HashMap<Arc<String>, Arc<Mutex<Test>>>>>,
+    test_style: Arc<Result<Bytes, (StatusCode, String)>>,
 }
 
 impl FileManager {
     pub async fn init() -> Arc<Mutex<FileManager>> {
         let map = HashMap::new();
         let map = Arc::new(Mutex::new(map));
-        let temp = Arc::new(Mutex::new(FileManager { file_list: map }));
+        let test_style = Arc::new(match read_to_string("test/style.css") {
+            Ok(css) => Ok(Bytes::from(css)),
+            Err(e) => {
+                eprintln!("在读取CSS文件的时候发生了错误：{}", e);
+                Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+            }
+        });
+        let temp = Arc::new(Mutex::new(FileManager { file_list: map, test_style }));
         let temp = Arc::clone(&temp);
         temp.lock().await.load_test_file().await;
         temp
@@ -93,7 +103,28 @@ impl FileManager {
             }
             Test::build_404_response()
         }
-        Router::new().fallback(fallback).with_state(Arc::clone(&self.file_list))
+        let test_style = Arc::clone(&self.test_style);
+        Router::new()
+            .route("/test/style.css", get(move || {
+                let test_style = Arc::clone(&test_style);
+                async move {
+                    match &*test_style {
+                        Ok(css) => Response::builder()
+                            .status(StatusCode::OK)
+                            .header("content-type", "text/css; charset=utf-8")
+                            .header("cache-control", "no-store")
+                            .body(Body::from(css.clone()))
+                            .unwrap(),
+                        Err((code, reason)) => Response::builder()
+                            .status(*code)
+                            .header("content-type", "text/plain; charset=utf-8")
+                            .body(Body::from(reason.clone()))
+                            .unwrap(),
+                    }
+                }
+            }))
+            .fallback(fallback)
+            .with_state(Arc::clone(&self.file_list))
     }
 }
 
