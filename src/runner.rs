@@ -5,28 +5,26 @@ use axum::extract::State;
 use axum::http::{Response, StatusCode, Uri};
 use axum::routing::get;
 use axum::Router;
-use std::collections::HashMap;
 use std::fmt::format;
 use std::process::exit;
 use std::sync::Arc;
 use tokio::io;
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::net::TcpListener;
-use tokio::sync::Mutex;
 
 pub struct Runner {
-    file_manager: FileManager,
+    arc_file_manager: Arc<FileManager>,
 }
 
 impl Runner {
-    pub fn init(file_manager: FileManager) -> Self {
+    pub fn init(arc_file_manager: Arc<FileManager>) -> Self {
         Runner {
-            file_manager
+            arc_file_manager,
         }
     }
 
-    pub async fn run_server(runner: Arc<Self>) {
-        tokio::spawn(Self::commandline_handler(Arc::clone(&runner)));
+    pub async fn run_server(runner: Arc<Runner>) {
+        tokio::spawn(Self::commandline_handler(Arc::clone(&runner.arc_file_manager)));
 
         axum::serve(match TcpListener::bind("0.0.0.0:2233").await {
             Ok(l) => l,
@@ -34,10 +32,10 @@ impl Runner {
                 eprintln!("发生了错误：{}", e.kind());
                 exit(1);
             }
-        }, runner.get_handler()).await.unwrap();
+        }, Self::get_handler(runner)).await.unwrap();
     }
 
-    async fn commandline_handler(runner: Arc<Self>) {
+    async fn commandline_handler(file_manager: Arc<FileManager>) {
         let mut input = String::new();
         loop {
             let mut stdin = BufReader::new(io::stdin());
@@ -57,9 +55,11 @@ impl Runner {
                         temp
                     }
                 };
-                runner.file_manager.update_html(temp.trim()).await;
+                let temp1 = Arc::clone(&file_manager);
+                temp1.update_html(temp.trim()).await;
             } else if temp == "refresh" {
-                runner.file_manager.refresh().await;
+                let temp1 = Arc::clone(&file_manager);
+                FileManager::refresh(temp1).await;
             } else if temp == "exit" {
                 println!("stop~");
                 exit(0);
@@ -70,8 +70,8 @@ impl Runner {
         }
     }
 
-    fn get_handler(&self) -> Router {
-        let test_style = Arc::clone(&self.file_manager.get_test_style());
+    fn get_handler(runner: Arc<Runner>) -> Router {
+        let test_style = Arc::clone(&runner.arc_file_manager.test_style);
 
         return Router::new()
             .route("/test/style.css", get(move || {
@@ -93,13 +93,13 @@ impl Runner {
                 }
             }))
             .fallback(fallback)
-            .with_state(Arc::clone(&self.file_manager.get_file_list()));
+            .with_state(Arc::clone(&runner));
 
-        async fn fallback(uri: Uri, file_list: State<Arc<Mutex<HashMap<Arc<String>, Arc<Mutex<Test>>>>>>) -> Response<Body> {
-            for file in file_list.lock().await.iter() {
+        async fn fallback(uri: Uri, runner: State<Arc<Runner>>) -> Response<Body> {
+            for file in runner.arc_file_manager.file_list.lock().await.iter() {
                 let (path, file) = file;
                 if uri.eq(format(format_args!("/{}", path.trim_end_matches(".md"))).as_str()) {
-                    return file.lock().await.build_response(StatusCode::OK);
+                    return file.lock().await.build_response();
                 }
             }
             Test::build_404_response()

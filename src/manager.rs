@@ -1,5 +1,4 @@
 use crate::test::Test;
-use crate::utils::md_file_path_to_html;
 use axum::body::Bytes;
 use axum::http::StatusCode;
 use glob::glob;
@@ -9,40 +8,48 @@ use std::process::exit;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+pub(crate) type UriPath = Arc<String>;
+type FileList = Mutex<HashMap<UriPath, Arc<Mutex<Test>>>>;
+type TestStyle = Arc<Result<Bytes, (StatusCode, Bytes)>>;
+type FilePath = Arc<String>;
+
 pub struct FileManager {
-    file_list: Arc<Mutex<HashMap<Arc<String>, Arc<Mutex<Test>>>>>,
-    test_style: Arc<Result<Bytes, (StatusCode, String)>>,
+    pub file_list: FileList,
+    pub test_style: TestStyle,
 }
 
 impl FileManager {
-    pub async fn init() -> FileManager {
-        let map = Arc::new(Mutex::new(HashMap::new()));
+    pub async fn init() -> Arc<FileManager> {
+        let map = Mutex::new(HashMap::new());
+
+        //read css from hard_disk
         let test_style = Arc::new(match read_to_string("test/style.css") {
             Ok(css) => Ok(Bytes::from(css)),
             Err(e) => {
                 eprintln!("在读取CSS文件的时候发生了错误：{}", e);
-                Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
+                Err((StatusCode::INTERNAL_SERVER_ERROR, Bytes::from(e.to_string())))
             }
         });
-        // let temp = Arc::new(Mutex::new(FileManager { file_list: map, test_style }));
-        // let temp = Arc::clone(&temp);
-        // temp.lock().await.load_test_file().await;
-        // temp
+
         let file_manager = FileManager {
             file_list: map,
             test_style,
         };
-        file_manager.load_test_file().await;
-        file_manager
+
+        let temp = Arc::clone(&Arc::new(file_manager));
+        let temp2 = Arc::clone(&temp);
+        Self::load_test_file(temp).await;
+
+        temp2
     }
 
-    pub async fn refresh(&self) {
-        self.file_list.lock().await.clear();
-        self.load_test_file().await;
-        println!("refresh finished~")
+    pub async fn refresh(file_manager: Arc<FileManager>) {
+        file_manager.file_list.lock().await.clear();
+        Self::load_test_file(file_manager).await;
+        println!("refresh finished~");
     }
 
-    async fn load_test_file(&self) {
+    async fn load_test_file(file_manager: Arc<FileManager>) {
         for entry in glob("test/*.md").expect("Failed to read glob pattern") {
             match entry {
                 Ok(path) => {
@@ -56,10 +63,9 @@ impl FileManager {
                         }
                     };
                     let path = Arc::new(path.replace('\\', "/"));
-                    let path1 = Arc::clone(&path);
-                    let path2 = Arc::clone(&path);
+                    let uri_path: FilePath = Arc::clone(&path);
                     let path3 = Arc::clone(&path);
-                    self.file_list.lock().await.insert(path1, Arc::new(Mutex::new(Test::new(path2, md_file_path_to_html(path3)))));
+                    file_manager.file_list.lock().await.insert(uri_path, Arc::new(Mutex::new(Test::new(path3))));
                 }
                 Err(e) => {
                     println!("加载文件时出错：{:?}", e);
@@ -67,10 +73,6 @@ impl FileManager {
                 }
             }
         }
-    }
-
-    pub async fn add(&self, path: Arc<String>, point: Arc<Mutex<Test>>) {
-        self.file_list.lock().await.insert(path, point);
     }
 
     pub async fn update_html(&self, path: &str) {
@@ -81,65 +83,4 @@ impl FileManager {
             None => eprintln!("In reload: file not found or file not md: {} , or maybe you need \"refresh\"", path),
         }
     }
-
-    pub fn get_test_style(&self) -> Arc<Result<Bytes, (StatusCode, String)>> {
-        Arc::clone(&self.test_style)
-    }
-
-    pub fn get_file_list(&self) -> Arc<Mutex<HashMap<Arc<String>, Arc<Mutex<Test>>>>> {
-        Arc::clone(&self.file_list)
-    }
-
-    // pub async fn run_server(file_manager: Arc<FileManager>) {
-    //     let handler = file_manager.get_handler();
-    //     axum::serve(match TcpListener::bind("0.0.0.0:2233").await {
-    //         Ok(l) => l,
-    //         Err(e) => {
-    //             eprintln!("发生了错误：{}", e.kind());
-    //             exit(1);
-    //         }
-    //     }, handler).await.unwrap();
-    // }
-
-    // fn get_handler(&self) -> Router {
-    //     async fn fallback(uri: Uri, file_list: State<Arc<Mutex<HashMap<Arc<String>, Arc<Mutex<Test>>>>>>) -> Response<Body> {
-    //         for file in file_list.lock().await.iter() {
-    //             let (path, file) = file;
-    //             if uri.eq(format(format_args!("/{}", path.trim_end_matches(".md"))).as_str()) {
-    //                 return file.lock().await.build_response(StatusCode::OK);
-    //             }
-    //         }
-    //         Test::build_404_response()
-    //     }
-    //     let test_style = Arc::clone(&self.test_style);
-    //     Router::new()
-    //         .route("/test/style.css", get(move || {
-    //             let test_style = Arc::clone(&test_style);
-    //             async move {
-    //                 match &*test_style {
-    //                     Ok(css) => Response::builder()
-    //                         .status(StatusCode::OK)
-    //                         .header("content-type", "text/css; charset=utf-8")
-    //                         .header("cache-control", "no-store")
-    //                         .body(Body::from(css.clone()))
-    //                         .unwrap(),
-    //                     Err((code, reason)) => Response::builder()
-    //                         .status(*code)
-    //                         .header("content-type", "text/plain; charset=utf-8")
-    //                         .body(Body::from(reason.clone()))
-    //                         .unwrap(),
-    //                 }
-    //             }
-    //         }))
-    //         .fallback(fallback)
-    //         .with_state(Arc::clone(&self.file_list))
-    // }
 }
-
-
-// impl<'a> Iterator for FileManager<'a> {
-//     type Item = ();?
-//
-//     fn next(&mut self) -> Option<Self::Item> {
-//         todo!()
-//     }
