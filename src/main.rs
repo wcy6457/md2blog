@@ -1,17 +1,19 @@
-pub mod test;
+pub mod command;
 pub mod manager;
 pub mod runner;
-pub mod utils;
+pub mod test;
 
 use crate::manager::FileManager;
 use crate::runner::Runner;
-use std::sync::Arc;
-
 #[tokio::main]
 async fn main() {
-    let file_manager = FileManager::init().await;
+    println!("Server has been started.");
 
-    let runner = Arc::clone(&Arc::new(Runner::init(file_manager)));
+    let file_manager = FileManager::init();
+
+    let runner = Runner::init(file_manager);
 
     Runner::run_server(runner).await;
+
+    println!("bye~");
 }

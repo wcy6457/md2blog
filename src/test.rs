@@ -2,26 +2,25 @@ use axum::body::Body;
 use axum::body::Bytes;
 use axum::http::StatusCode;
 use axum::response::Response;
-use comrak::{markdown_to_html, Options};
+use comrak::{Options, markdown_to_html};
 use std::fs::read_to_string;
 use std::path::Path;
-use std::sync::Arc;
 
 pub struct Test {
-    file_path: Arc<String>,
+    file_path: String,
     html: Result<(StatusCode, Bytes), (StatusCode, String)>,
 }
 impl Test {
-    pub fn new(file_path: Arc<String>) -> Test {
+    pub fn new(file_path: String) -> Test {
         Test {
-            file_path: Arc::clone(&file_path),
-            html: md_file_path_to_html_to_bytes(Arc::clone(&file_path)),
+            html: md_file_path_to_html_to_bytes(&file_path),
+            file_path,
         }
     }
 
     pub fn update_html(&mut self) {
         //self.html = md_file_path_to_html_to_bytes(self.path);
-        match md_file_path_to_html_to_bytes(self.file_path.clone()) {
+        match md_file_path_to_html_to_bytes(&self.file_path) {
             Ok(html) => {
                 self.html = Ok(html);
                 println!("reloading completed!");
@@ -43,18 +42,16 @@ impl Test {
     */
     pub fn build_response(&self) -> Response {
         match &self.html {
-            Ok((status_code, s)) => {
-                Response::builder()
-                    .status(status_code)
-                    .header("content-type", "text/html; charset=utf-8")
-                    .body(Body::from(s.clone())).unwrap_or(Self::build_500_response())
-            }
-            Err((code, reason)) => {
-                Response::builder()
-                    .status(code)
-                    .header("content-type", "text/html; charset=utf-8")
-                    .body(Body::from(reason.to_string())).unwrap_or(Self::build_500_response())
-            }
+            Ok((status_code, s)) => Response::builder()
+                .status(status_code)
+                .header("content-type", "text/html; charset=utf-8")
+                .body(Body::from(s.clone()))
+                .unwrap_or(Self::build_500_response()),
+            Err((code, reason)) => Response::builder()
+                .status(code)
+                .header("content-type", "text/html; charset=utf-8")
+                .body(Body::from(reason.to_string()))
+                .unwrap_or(Self::build_500_response()),
         }
     }
 
@@ -75,14 +72,15 @@ impl Test {
     }
 }
 
-fn md_file_path_to_html_to_bytes(path: Arc<String>) -> Result<(StatusCode, Bytes), (StatusCode, String)> {
-    match read_to_string(Path::new(&*path)) {
-        Ok(s) => Ok(
-            (StatusCode::OK, Bytes::from(format!(
+fn md_file_path_to_html_to_bytes(path: &str) -> Result<(StatusCode, Bytes), (StatusCode, String)> {
+    match read_to_string(Path::new(path)) {
+        Ok(s) => Ok((
+            StatusCode::OK,
+            Bytes::from(format!(
                 r#"<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/test/style.css"></head><body><main class="markdown-body">{}</main></body></html>"#,
                 markdown_to_html(s.as_str(), &Options::default())
-            )))
-        ),
+            )),
+        )),
         Err(e) => {
             eprintln!("在读取文件的时候发生了错误：{}", e);
             Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
