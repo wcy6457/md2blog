@@ -6,13 +6,13 @@ use comrak::{Options, markdown_to_html};
 use std::fs::read_to_string;
 use std::path::Path;
 
-pub struct Test {
+pub struct Page {
     file_path: String,
     html: Result<(StatusCode, Bytes), (StatusCode, String)>,
 }
-impl Test {
-    pub fn new(file_path: String) -> Test {
-        Test {
+impl Page {
+    pub fn new(file_path: String) -> Page {
+        Page {
             html: md_file_path_to_html_to_bytes(&file_path),
             file_path,
         }

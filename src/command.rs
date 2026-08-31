@@ -1,16 +1,18 @@
-use crate::manager::FileManager;
+use crate::page_manager::PageManager;
 use arc_swap::ArcSwap;
 use std::process::exit;
 use std::sync::Arc;
 use tokio::io::{self, AsyncBufReadExt, BufReader};
 
 pub struct CommandHandler {
-    file_manager_store: Arc<ArcSwap<FileManager>>,
+    page_manager_store: Arc<ArcSwap<PageManager>>,
 }
 
 impl CommandHandler {
-    pub fn new(file_manager_store: Arc<ArcSwap<FileManager>>) -> Self {
-        Self { file_manager_store }
+    pub fn new(page_manager_store: Arc<ArcSwap<PageManager>>) -> Self {
+        Self {
+            page_manager_store
+        }
     }
 
     pub async fn run(self) {
@@ -28,13 +30,16 @@ impl CommandHandler {
     }
 
     async fn handle(&self, command: &str) {
-        if let Some(path) = command.strip_prefix("reload ") {
-            let file_manager = self.file_manager_store.load_full();
-            file_manager.update_html(path.trim()).await;
+        if let Some(file_path) = command.strip_prefix("reload ") {
+            let page_manager = self.page_manager_store.load_full();
+            match page_manager.update_page_by_file_path(file_path.trim()).await {
+                true => println!("reload success"),
+                false => eprintln!("In reload: file not found or file not md: {} , or maybe you need \"refresh\"", file_path)
+            }
         } else if command == "refresh" {
-            let file_manager = self.file_manager_store.load();
-            let refreshed = Arc::new(file_manager.refreshed());
-            self.file_manager_store.store(refreshed);
+            let file_manager = self.page_manager_store.load();
+            let file_manager = Arc::new(file_manager.refreshed());
+            self.page_manager_store.store(file_manager);
             println!("refresh finished~");
         } else if command == "exit" {
             println!("stop~");

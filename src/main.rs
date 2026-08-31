@@ -1,17 +1,17 @@
 pub mod command;
-pub mod manager;
+pub mod page_manager;
 pub mod runner;
-pub mod test;
+pub mod page;
 
-use crate::manager::FileManager;
+use crate::page_manager::PageManager;
 use crate::runner::Runner;
 #[tokio::main]
 async fn main() {
     println!("Server has been started.");
 
-    let file_manager = FileManager::init();
+    let page_manager = PageManager::init();
 
-    let runner = Runner::init(file_manager);
+    let runner = Runner::init(page_manager);
 
     Runner::run_server(runner).await;
 

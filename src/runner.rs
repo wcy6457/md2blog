@@ -1,29 +1,29 @@
 use crate::command::CommandHandler;
-use crate::manager::FileManager;
-use crate::test::Test;
+use crate::page::Page;
+use crate::page_manager::PageManager;
 use arc_swap::ArcSwap;
-use axum::Router;
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{Response, StatusCode, Uri};
 use axum::routing::get;
+use axum::Router;
 use std::process::exit;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
 pub struct Runner {
-    file_manager_store: Arc<ArcSwap<FileManager>>,
+    page_manager_store: Arc<ArcSwap<PageManager>>,
 }
 
 impl Runner {
-    pub fn init(file_manager: FileManager) -> Self {
+    pub fn init(page_manager: PageManager) -> Self {
         Runner {
-            file_manager_store: Arc::new(ArcSwap::from_pointee(file_manager)),
+            page_manager_store: Arc::new(ArcSwap::from_pointee(page_manager)),
         }
     }
 
     pub async fn run_server(runner: Runner) {
-        tokio::spawn(CommandHandler::new(Arc::clone(&runner.file_manager_store)).run());
+        tokio::spawn(CommandHandler::new(Arc::clone(&runner.page_manager_store)).run());
 
         axum::serve(
             match TcpListener::bind("0.0.0.0:2233").await {
@@ -33,23 +33,23 @@ impl Runner {
                     exit(1);
                 }
             },
-            Self::get_handler(runner.file_manager_store),
+            Self::get_handler(runner.page_manager_store),
         )
-        .await
-        .unwrap();
+            .await
+            .unwrap();
     }
 
-    fn get_handler(file_manager_store: Arc<ArcSwap<FileManager>>) -> Router {
-        let test_style = {
-            let file_manager = file_manager_store.load();
-            file_manager.test_style()
-        };
+    fn get_handler(page_manager_store: Arc<ArcSwap<PageManager>>) -> Router {
+        let test_style =
+            {
+                let page_manager = page_manager_store.load();
+                page_manager.get_test_style_clone()
+            };
 
         return Router::new()
             .route(
                 "/test/style.css",
                 get(move || {
-                    let test_style = test_style.clone();
                     async move {
                         match test_style {
                             Ok(css) => Response::builder()
@@ -68,22 +68,22 @@ impl Runner {
                 }),
             )
             .fallback(fallback)
-            .with_state(file_manager_store);
+            .with_state(page_manager_store);
 
         async fn fallback(
             uri: Uri,
-            State(file_manager_store): State<Arc<ArcSwap<FileManager>>>,
+            State(page_manager_store): State<Arc<ArcSwap<PageManager>>>,
         ) -> Response<Body> {
-            let file = {
-                let file_manager = file_manager_store.load();
-                file_manager.file_by_route(uri.path())
+            let page = {
+                let file_manager = page_manager_store.load();
+                file_manager.get_page_by_uri_path(uri.path())
             };
 
-            if let Some(file) = file {
+            if let Some(file) = page {
                 return file.lock().await.build_response();
             }
 
-            Test::build_404_response()
+            Page::build_404_response()
         }
     }
 }
