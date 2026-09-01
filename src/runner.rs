@@ -1,4 +1,5 @@
 use crate::command::CommandHandler;
+use crate::dual_hashmap::DualHashmapArcSwapExt;
 use crate::page::Page;
 use crate::page_manager::PageManager;
 use arc_swap::ArcSwap;
@@ -74,16 +75,12 @@ impl Runner {
             uri: Uri,
             State(page_manager_store): State<Arc<ArcSwap<PageManager>>>,
         ) -> Response<Body> {
-            let page = {
-                let file_manager = page_manager_store.load();
-                file_manager.get_page_by_uri_path(uri.path())
-            };
-
-            if let Some(file) = page {
-                return file.lock().await.build_response();
+            match page_manager_store.load().dual_hashmap.get_page_by_uri_path(uri.path()) {
+                Some(page) => {
+                    page.build_response().await
+                }
+                None => { Page::build_404_response() }
             }
-
-            Page::build_404_response()
         }
     }
 }

@@ -23,7 +23,11 @@ impl CommandHandler {
             input.clear();
             match stdin.read_line(&mut input).await {
                 Ok(0) => return,
-                Ok(_) => self.handle(input.trim_end()).await,
+                Ok(_) => {
+                    println!("-----");
+                    self.handle(input.trim_end()).await;
+                    println!("-----");
+                }
                 Err(e) => eprintln!("读取命令时发生了错误：{e}"),
             }
         }
@@ -31,18 +35,14 @@ impl CommandHandler {
 
     async fn handle(&self, command: &str) {
         if let Some(file_path) = command.strip_prefix("reload ") {
-            let page_manager = self.page_manager_store.load_full();
-            match page_manager.update_page_by_file_path(file_path.trim()).await {
-                true => println!("reload success"),
-                false => eprintln!("In reload: file not found or file not md: {} , or maybe you need \"refresh\"", file_path)
-            }
+            println!("正在重新加载文件{file_path}......");
+            println!("todo~~~");
         } else if command == "refresh" {
-            let file_manager = self.page_manager_store.load();
-            let file_manager = Arc::new(file_manager.refreshed());
-            self.page_manager_store.store(file_manager);
-            println!("refresh finished~");
+            println!("正在重新加载所有文件......");
+            let page_manager = Arc::new(PageManager::init());
+            self.page_manager_store.store(page_manager);
         } else if command == "exit" {
-            println!("stop~");
+            println!("服务器关闭中~");
             exit(0);
         } else {
             println!("杂鱼，这点指令都输不对~");
