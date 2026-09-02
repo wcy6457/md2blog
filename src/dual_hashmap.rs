@@ -29,8 +29,10 @@ impl DualHashmap {
     }
 
     fn insert_by_page(&mut self, page: Arc<Page>) {
-        self.file_path_to_page_list.insert(Arc::clone(&page).file_path.clone(), Arc::clone(&page));
-        self.uri_path_to_page_list.insert(Arc::clone(&page).uri_path.clone(), Arc::clone(&page));
+        self.file_path_to_page_list
+            .insert(Arc::clone(&page).file_path.clone(), Arc::clone(&page));
+        self.uri_path_to_page_list
+            .insert(Arc::clone(&page).uri_path.clone(), Arc::clone(&page));
     }
 }
 
@@ -53,14 +55,14 @@ impl DualHashmapArcSwapExt for ArcSwap<DualHashmap> {
     fn get_page_by_uri_path(&self, uri_path: &str) -> Option<Arc<Page>> {
         match self.load().uri_path_to_page_list.get(uri_path) {
             Some(s) => Some(Arc::clone(s)),
-            None => None
+            None => None,
         }
     }
 
     fn get_page_by_path_path(&self, file_path: &str) -> Option<Arc<Page>> {
         match self.load().file_path_to_page_list.get(file_path) {
             Some(s) => Some(Arc::clone(s)),
-            None => None
+            None => None,
         }
     }
 
@@ -80,9 +82,10 @@ impl DualHashmapArcSwapExt for ArcSwap<DualHashmap> {
                         });
                         Ok(())
                     }
-                    None => {
-                        Err("发生了未知的意外，这一定是因为异步操作的bug导致的。请反馈开发者。".to_string())
-                    }
+                    None => Err(
+                        "发生了未知的意外，这一定是因为异步操作的bug导致的。请反馈开发者。"
+                            .to_string(),
+                    ),
                 }
             }
             None => {

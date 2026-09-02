@@ -2,7 +2,7 @@ use axum::body::Body;
 use axum::body::Bytes;
 use axum::http::StatusCode;
 use axum::response::Response;
-use comrak::{markdown_to_html, Options};
+use comrak::{Options, markdown_to_html};
 use std::fs::read_to_string;
 use std::path::Path;
 
@@ -31,7 +31,6 @@ impl Page {
             file_path,
         }
     }
-
 
     /**
     status_code - 状态码，诸如404，500，200一类
@@ -93,19 +92,27 @@ fn md_file_path_to_html_to_bytes(path: &str) -> Result<(StatusCode, Bytes), (Sta
 fn read_uri_path_from_file_path(file_path: &String) -> String {
     match read_to_string(Path::new(file_path)) {
         Ok(s) => {
-            match s.lines().filter(|line| { line.contains("uri_path:") }).collect::<Vec<&str>>().first() {
-                Some(s) => {
-                    s.trim().trim_start_matches("uri_path:").to_string()
-                }
+            match s
+                .lines()
+                .filter(|line| line.contains("uri_path:"))
+                .collect::<Vec<&str>>()
+                .first()
+            {
+                Some(s) => s.trim().trim_start_matches("uri_path:").to_string(),
                 None => {
-                    eprintln!("在 {file_path} 中找不到关于uri_path的设置。已经回退到默认的按文件路径挂载。");
+                    eprintln!(
+                        "在 {file_path} 中找不到关于uri_path的设置。已经回退到默认的按文件路径挂载。"
+                    );
                     let file_path = file_path.trim_end_matches(".md");
                     format!("/{}", file_path).to_string()
                 }
             }
         }
         Err(e) => {
-            eprintln!("在加载 {} 的uri_path时发生错误：{}。已经回退到默认的按文件路径挂载。", file_path, e);
+            eprintln!(
+                "在加载 {} 的uri_path时发生错误：{}。已经回退到默认的按文件路径挂载。",
+                file_path, e
+            );
             let file_path = file_path.trim_end_matches(".md");
             format!("/{}", file_path).to_string()
         }

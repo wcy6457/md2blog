@@ -15,7 +15,6 @@ pub struct PageManager {
     test_style: TestStyle,
 }
 
-
 impl PageManager {
     pub fn init() -> PageManager {
         let dual_hashmap = DualHashmap::new();
@@ -41,17 +40,16 @@ impl PageManager {
         }
 
         //read css from hard_disk
-        let test_style =
-            match read_to_string("test/style.css") {
-                Ok(css) => Ok(Bytes::from(css)),
-                Err(e) => {
-                    eprintln!("在读取CSS文件的时候发生了错误：{}", e);
-                    Err((
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Bytes::from(e.to_string()),
-                    ))
-                }
-            };
+        let test_style = match read_to_string("test/style.css") {
+            Ok(css) => Ok(Bytes::from(css)),
+            Err(e) => {
+                eprintln!("在读取CSS文件的时候发生了错误：{}", e);
+                Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Bytes::from(e.to_string()),
+                ))
+            }
+        };
 
         PageManager {
             dual_hashmap,
