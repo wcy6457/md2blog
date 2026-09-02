@@ -24,9 +24,7 @@ impl Runner {
     }
 
     pub async fn run_server(runner: Runner) {
-        tokio::spawn(CommandHandler::new(Arc::clone(&runner.page_manager_store)).run());
-
-        axum::serve(
+        let server = axum::serve(
             match TcpListener::bind("0.0.0.0:2233").await {
                 Ok(l) => l,
                 Err(e) => {
@@ -34,10 +32,11 @@ impl Runner {
                     exit(1);
                 }
             },
-            Self::get_handler(runner.page_manager_store),
-        )
-            .await
-            .unwrap();
+            Self::get_handler(Arc::clone(&runner.page_manager_store)),
+        );
+
+
+        server.with_graceful_shutdown(async { tokio::spawn(CommandHandler::new(runner.page_manager_store).run()).await.unwrap() }).await.unwrap();
     }
 
     fn get_handler(page_manager_store: Arc<ArcSwap<PageManager>>) -> Router {

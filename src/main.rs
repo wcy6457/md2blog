@@ -8,7 +8,7 @@ use crate::page_manager::PageManager;
 use crate::runner::Runner;
 #[tokio::main]
 async fn main() {
-    println!("Server has been started.");
+    println!("服务器正在启动......");
 
     let page_manager = PageManager::init();
 
