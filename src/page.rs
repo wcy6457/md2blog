@@ -6,12 +6,24 @@ use comrak::{markdown_to_html, Options};
 use std::fs::read_to_string;
 use std::path::Path;
 
+/**
+Page::new()已经自带错误处理，错误信息会被保存在结构体的html中。
+
+
+Page::build_response()已经可以自动按照html中的信息自动构建合适的Response
+*/
 pub struct Page {
     pub file_path: String,
     pub uri_path: String,
     pub html: Result<(StatusCode, Bytes), (StatusCode, String)>,
 }
 impl Page {
+    /**
+    已经自带错误处理，错误信息会被保存在结构体的html中。
+
+
+    Page::build_response()已经可以自动按照html中的信息自动构建合适的Response
+    */
     pub fn new(file_path: String) -> Page {
         Page {
             html: md_file_path_to_html_to_bytes(&file_path),
@@ -20,22 +32,10 @@ impl Page {
         }
     }
 
-    // pub fn update_html(&mut self) {
-    //     //self.html = md_file_path_to_html_to_bytes(self.path);
-    //     match md_file_path_to_html_to_bytes(&self.file_path) {
-    //         Ok(html) => {
-    //             self.html = Ok(html);
-    //             println!("reloading completed!");
-    //         }
-    //         Err((_, err)) => {
-    //             eprintln!("In reload: rebuild html: {}", err);
-    //             eprintln!("In reload: nothing changed");
-    //         }
-    //     }
-    // }
 
     /**
     status_code - 状态码，诸如404，500，200一类
+
 
     html - Result<T,Y><br>
     &nbsp;&nbsp;&nbsp;&nbsp;T： html内容<br>

@@ -1,3 +1,4 @@
+use crate::dual_hashmap::DualHashmapArcSwapExt;
 use crate::page_manager::PageManager;
 use arc_swap::ArcSwap;
 use std::sync::Arc;
@@ -17,7 +18,7 @@ impl CommandHandler {
     pub async fn run(self) {
         let mut input = String::new();
         let mut stdin = BufReader::new(io::stdin());
-        
+
         println!("服务器已经上线！");
 
         loop {
@@ -39,7 +40,10 @@ impl CommandHandler {
     async fn handle(&self, command: &str) -> bool {
         if let Some(file_path) = command.strip_prefix("reload ") {
             println!("正在重新加载文件{file_path}......");
-            println!("todo~~~");
+            match self.page_manager_store.load_full().dual_hashmap.update_page_by_file_path(file_path) {
+                Ok(_) => (),
+                Err(e) => eprintln!("{}", e)
+            };
             false
         } else if command == "refresh" {
             println!("正在重新加载所有文件......");

@@ -1,0 +1,4 @@
+/target/
+/.rustdoc-axum-*/
+/.idea/
+/.project-mentor/
