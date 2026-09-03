@@ -4,7 +4,7 @@ use crate::page::Page;
 use crate::page_manager::PageManager;
 use arc_swap::ArcSwap;
 use axum::Router;
-use axum::body::Body;
+use axum::body::{Body, Bytes};
 use axum::extract::State;
 use axum::http::{Response, StatusCode, Uri};
 use axum::routing::get;
@@ -12,8 +12,16 @@ use std::process::exit;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 
+type TestStyle = Result<Bytes, (StatusCode, Bytes)>;
+
 pub struct Runner {
     page_manager_store: Arc<ArcSwap<PageManager>>,
+}
+
+#[derive(Clone)]
+struct AppState {
+    page_manager_store: Arc<ArcSwap<PageManager>>,
+    test_style: TestStyle,
 }
 
 impl Runner {
@@ -51,33 +59,33 @@ impl Runner {
             page_manager.get_test_style_clone()
         };
 
-        return Router::new()
-            .route(
-                "/test/style.css",
-                get(move || async move {
-                    match test_style {
-                        Ok(css) => Response::builder()
-                            .status(StatusCode::OK)
-                            .header("content-type", "text/css; charset=utf-8")
-                            .header("cache-control", "no-store")
-                            .body(Body::from(css))
-                            .unwrap(),
-                        Err((code, reason)) => Response::builder()
-                            .status(code)
-                            .header("content-type", "text/plain; charset=utf-8")
-                            .body(Body::from(reason))
-                            .unwrap(),
-                    }
-                }),
-            )
-            .fallback(fallback)
-            .with_state(page_manager_store);
+        let app_state = AppState {
+            page_manager_store,
+            test_style,
+        };
 
-        async fn fallback(
-            uri: Uri,
-            State(page_manager_store): State<Arc<ArcSwap<PageManager>>>,
-        ) -> Response<Body> {
-            match page_manager_store
+        return Router::new()
+            .route("/{*key}", get(handler))
+            .with_state(app_state);
+
+        async fn handler(uri: Uri, State(app_state): State<AppState>) -> Response<Body> {
+            if uri.path().eq("/test/style.css") {
+                return match app_state.test_style {
+                    Ok(css) => Response::builder()
+                        .status(StatusCode::OK)
+                        .header("content-type", "text/css; charset=utf-8")
+                        .header("cache-control", "no-store")
+                        .body(Body::from(css))
+                        .unwrap(),
+                    Err((code, reason)) => Response::builder()
+                        .status(code)
+                        .header("content-type", "text/plain; charset=utf-8")
+                        .body(Body::from(reason))
+                        .unwrap(),
+                };
+            };
+            match app_state
+                .page_manager_store
                 .load()
                 .dual_hashmap
                 .get_page_by_uri_path(uri.path())
