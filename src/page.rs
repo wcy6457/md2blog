@@ -24,11 +24,18 @@ impl Page {
 
     Page::build_response()已经可以自动按照html中的信息自动构建合适的Response
     */
-    pub fn new(file_path: String) -> Page {
-        Page {
-            html: md_file_path_to_html_to_bytes(&file_path),
-            uri_path: read_uri_path_from_file_path(&file_path),
-            file_path,
+    pub fn new(file_path: &str) -> Page {
+        match load_file_by_file_path(file_path) {
+            Ok((uri_path, status_code, bytes)) => Page {
+                file_path: file_path.to_string(),
+                uri_path,
+                html: Ok((status_code, bytes)),
+            },
+            Err((status_code, message)) => Page {
+                file_path: file_path.to_string(),
+                uri_path: file_path.to_string(),
+                html: Err((status_code, message)),
+            },
         }
     }
 
@@ -73,48 +80,69 @@ impl Page {
     }
 }
 
-fn md_file_path_to_html_to_bytes(path: &str) -> Result<(StatusCode, Bytes), (StatusCode, String)> {
-    match read_to_string(Path::new(path)) {
-        Ok(s) => Ok((
-            StatusCode::OK,
-            Bytes::from(format!(
-                r#"<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/test/style.css"></head><body><main class="markdown-body">{}</main></body></html>"#,
-                markdown_to_html(s.as_str(), &Options::default())
-            )),
-        )),
-        Err(e) => {
-            eprintln!("在读取文件的时候发生了错误：{}", e);
-            Err((StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
-        }
-    }
-}
+/**
+读取 Markdown 文件，并生成该页面的 URI 路径和 HTML 内容。
 
-fn read_uri_path_from_file_path(file_path: &String) -> String {
+# 返回值
+
+- 成功时返回：
+  `Ok((uri_path, StatusCode::OK, html_bytes))`
+  - `uri_path`：Markdown 中配置的访问路径；未配置时根据文件路径生成。
+  - `StatusCode::OK`：HTTP 200 状态码。
+  - `html_bytes`：转换后完整 HTML 页面的字节数据。
+
+- 失败时返回：
+  `Err((StatusCode::INTERNAL_SERVER_ERROR, error_message))`
+  - `StatusCode::INTERNAL_SERVER_ERROR`：HTTP 500 状态码。
+  - `error_message`：读取文件时产生的错误信息。
+*/
+fn load_file_by_file_path(
+    file_path: &str,
+) -> Result<(String, StatusCode, Bytes), (StatusCode, String)> {
     match read_to_string(Path::new(file_path)) {
-        Ok(s) => {
-            match s
+        Ok(markdown) => {
+            let uri_path = markdown
                 .lines()
-                .filter(|line| line.contains("uri_path:"))
-                .collect::<Vec<&str>>()
-                .first()
-            {
-                Some(s) => s.trim().trim_start_matches("uri_path:").to_string(),
-                None => {
+                .find(|line| line.contains("uri_path:"))
+                .map(|line| {
+                    line.trim()
+                        .trim_start_matches("uri_path:")
+                        .trim()
+                        .to_string()
+                })
+                .unwrap_or_else(|| {
                     eprintln!(
-                        "在 {file_path} 中找不到关于uri_path的设置。已经回退到默认的按文件路径挂载。"
+                        "在 {file_path} 中找不到关于 uri_path 的设置。\
+                        已经回退到默认的按文件路径挂载。"
                     );
-                    let file_path = file_path.trim_end_matches(".md");
-                    format!("/{}", file_path).to_string()
-                }
-            }
-        }
-        Err(e) => {
-            eprintln!(
-                "在加载 {} 的uri_path时发生错误：{}。已经回退到默认的按文件路径挂载。",
-                file_path, e
+
+                    let path_without_extension = file_path.trim_end_matches(".md");
+
+                    format!("/{path_without_extension}")
+                });
+
+            let html = format!(
+                r#"<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/test/style.css">
+</head>
+<body>
+    <main class="markdown-body">{}</main>
+</body>
+</html>"#,
+                markdown_to_html(&markdown, &Options::default())
             );
-            let file_path = file_path.trim_end_matches(".md");
-            format!("/{}", file_path).to_string()
+
+            Ok((uri_path, StatusCode::OK, Bytes::from(html)))
+        }
+
+        Err(error) => {
+            eprintln!("在读取文件 {file_path} 时发生了错误：{error}");
+
+            Err((StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))
         }
     }
 }

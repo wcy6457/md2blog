@@ -52,7 +52,7 @@ fn load_pages_into_map(mut dual_hashmap: DualHashmap) -> DualHashmap {
                     }
                 };
 
-                dual_hashmap.insert_by_page(Arc::new(Page::new(file_path)));
+                dual_hashmap.insert_by_page(Arc::new(Page::new(&file_path)));
             }
             Err(e) => {
                 eprintln!("加载文件时出错：{:?}", e);

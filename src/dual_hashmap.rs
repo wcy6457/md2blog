@@ -83,7 +83,7 @@ impl DualHashmapArcSwapExt for ArcSwap<DualHashmap> {
                             let mut dual_hashmap = DualHashmap::clone(dual_hashmap);
                             dual_hashmap.file_path_to_page_list.remove(file_path);
                             dual_hashmap.uri_path_to_page_list.remove(uri_path.as_str());
-                            dual_hashmap.insert_by_page(Arc::new(Page::new(file_path.to_string())));
+                            dual_hashmap.insert_by_page(Arc::new(Page::new(file_path)));
                             dual_hashmap
                         });
                         Ok(())
@@ -95,7 +95,7 @@ impl DualHashmapArcSwapExt for ArcSwap<DualHashmap> {
                 }
             }
             None => {
-                self.insert_by_page(Page::new(file_path.to_string()));
+                self.insert_by_page(Page::new(file_path));
                 Ok(())
             }
         }
