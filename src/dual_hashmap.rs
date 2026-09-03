@@ -20,26 +20,32 @@ impl Clone for DualHashmap {
     }
 }
 
+impl Default for DualHashmap {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DualHashmap {
-    pub fn new() -> Arc<ArcSwap<DualHashmap>> {
-        Arc::new(ArcSwap::from_pointee(DualHashmap {
+    pub fn new() -> DualHashmap {
+        DualHashmap {
             file_path_to_page_list: HashMap::new(),
             uri_path_to_page_list: HashMap::new(),
-        }))
+        }
     }
 
-    fn insert_by_page(&mut self, page: Arc<Page>) {
+    pub fn insert_by_page(&mut self, page: Arc<Page>) {
         self.file_path_to_page_list
-            .insert(Arc::clone(&page).file_path.clone(), Arc::clone(&page));
+            .insert(page.file_path.clone(), Arc::clone(&page));
         self.uri_path_to_page_list
-            .insert(Arc::clone(&page).uri_path.clone(), Arc::clone(&page));
+            .insert(page.uri_path.clone(), Arc::clone(&page));
     }
 }
 
 pub trait DualHashmapArcSwapExt {
     fn insert_by_page(&self, page: Page);
     fn get_page_by_uri_path(&self, uri_path: &str) -> Option<Arc<Page>>;
-    fn get_page_by_path_path(&self, file_path: &str) -> Option<Arc<Page>>;
+    fn get_page_by_file_path(&self, file_path: &str) -> Option<Arc<Page>>;
     fn update_page_by_file_path(&self, file_path: &str) -> Result<(), String>;
 }
 impl DualHashmapArcSwapExt for ArcSwap<DualHashmap> {
@@ -59,7 +65,7 @@ impl DualHashmapArcSwapExt for ArcSwap<DualHashmap> {
         }
     }
 
-    fn get_page_by_path_path(&self, file_path: &str) -> Option<Arc<Page>> {
+    fn get_page_by_file_path(&self, file_path: &str) -> Option<Arc<Page>> {
         match self.load().file_path_to_page_list.get(file_path) {
             Some(s) => Some(Arc::clone(s)),
             None => None,
@@ -67,7 +73,7 @@ impl DualHashmapArcSwapExt for ArcSwap<DualHashmap> {
     }
 
     fn update_page_by_file_path(&self, file_path: &str) -> Result<(), String> {
-        match self.get_page_by_path_path(file_path) {
+        match self.get_page_by_file_path(file_path) {
             Some(page) => {
                 let uri_path = page.uri_path.clone();
 

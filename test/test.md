@@ -1,5 +1,5 @@
 <!--
-    uri_path:/testaaa
+    uri_path:/test
 -->
 
 ***test***

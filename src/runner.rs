@@ -1,7 +1,6 @@
 use crate::command::CommandHandler;
-use crate::dual_hashmap::DualHashmapArcSwapExt;
 use crate::page::Page;
-use crate::page_manager::PageManager;
+use crate::page_manager::{PageManager, PageManagerStoreExt};
 use arc_swap::ArcSwap;
 use axum::Router;
 use axum::body::{Body, Bytes};
@@ -54,10 +53,7 @@ impl Runner {
     }
 
     fn get_handler(page_manager_store: Arc<ArcSwap<PageManager>>) -> Router {
-        let test_style = {
-            let page_manager = page_manager_store.load();
-            page_manager.get_test_style_clone()
-        };
+        let test_style = page_manager_store.get_test_style_clone();
 
         let app_state = AppState {
             page_manager_store,
@@ -86,8 +82,6 @@ impl Runner {
             };
             match app_state
                 .page_manager_store
-                .load()
-                .dual_hashmap
                 .get_page_by_uri_path(uri.path())
             {
                 Some(page) => page.build_response().await,
