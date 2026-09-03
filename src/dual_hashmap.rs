@@ -35,13 +35,23 @@ impl DualHashmap {
     }
 
     /**
-    同时按实例内容对两个hashmap同时插入的比较底层的方法
+    同时按实例内容对两个hashmap同时插入的比较底层的方法，插入前会确认计划插入的key是否已被占用.
 
     目前来看一般只应该在服务器第一次启动的时候、重新遍历加载markdown的时候调用或被其他封装好的类调用
 
     Date：2026.9.3
     */
     pub fn insert_by_page(&mut self, page: Arc<Page>) {
+        if self.file_path_to_page_list.contains_key(&page.file_path) {
+            eprintln!("加载文件{}时，遇到在已加载的文件列表中已经存在的问题,已跳过加载", page.file_path);
+            return;
+        }
+
+        if self.uri_path_to_page_list.contains_key(&page.uri_path) {
+            eprintln!("加载文件{}时，遇到在已加载的页面路径列表中已经存在的问题，已跳过加载", page.file_path);
+            return;
+        }
+
         self.file_path_to_page_list
             .insert(page.file_path.clone(), Arc::clone(&page));
         self.uri_path_to_page_list
@@ -86,8 +96,8 @@ impl DualHashmapArcSwapExt for ArcSwap<DualHashmap> {
         match self.get_page_by_file_path(file_path) {
             //1先查双重hashmap里有无关于这个文件路径的记录
             Some(page) => {
-                //1查到了
-                let uri_path = &page.uri_path; //1从查到的实例里取出uri_path
+                //1查到了,已登记
+                let uri_path = &page.uri_path; //1从查到的实例里取出uri_path，那就是自己的旧路径
 
                 match self.load().uri_path_to_page_list.get(uri_path) {
                     //2再从前面的uri_path查另外一个hashmap有无记录

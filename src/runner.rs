@@ -62,6 +62,7 @@ impl Runner {
 
         return Router::new()
             .route("/{*key}", get(handler))
+            .fallback(fallback)
             .with_state(app_state);
 
         async fn handler(uri: Uri, State(app_state): State<AppState>) -> Response<Body> {
@@ -84,6 +85,13 @@ impl Runner {
                 .page_manager_store
                 .get_page_by_uri_path(uri.path())
             {
+                Some(page) => page.build_response().await,
+                None => Page::build_404_response(),
+            }
+        }
+
+        async fn fallback(_: Uri, State(app_state): State<AppState>) -> Response<Body> {
+            match app_state.page_manager_store.get_page_by_uri_path("/") {
                 Some(page) => page.build_response().await,
                 None => Page::build_404_response(),
             }
