@@ -19,7 +19,7 @@ impl PageManager {
     pub fn init() -> PageManager {
         //read Markdown files from disk
         let dual_hashmap = DualHashmap::new();
-        let dual_hashmap = load_pages_into_map(dual_hashmap);
+        let dual_hashmap = load_pages_from_disk_into_map(dual_hashmap);
 
         //read css from disk
         let test_style = match read_to_string("test/style.css") {
@@ -40,7 +40,12 @@ impl PageManager {
     }
 }
 
-fn load_pages_into_map(mut dual_hashmap: DualHashmap) -> DualHashmap {
+/**
+目前是遍历预设好的相对路径：test/\* 下的markdown文件。其他功能todo
+
+Date：2026.9.3
+*/
+fn load_pages_from_disk_into_map(mut dual_hashmap: DualHashmap) -> DualHashmap {
     for entry in glob("test/*.md").expect("Failed to read glob pattern") {
         match entry {
             Ok(file_path) => {
@@ -95,7 +100,7 @@ impl PageManagerStoreExt for ArcSwap<PageManager> {
 
     fn refresh(&self) {
         let dual_hashmap = DualHashmap::new();
-        let dual_hashmap = load_pages_into_map(dual_hashmap);
+        let dual_hashmap = load_pages_from_disk_into_map(dual_hashmap);
         self.load().dual_hashmap.store(Arc::new(dual_hashmap));
     }
 }
