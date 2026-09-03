@@ -43,12 +43,18 @@ impl DualHashmap {
     */
     pub fn insert_by_page(&mut self, page: Arc<Page>) {
         if self.file_path_to_page_list.contains_key(&page.file_path) {
-            eprintln!("加载文件{}时，遇到在已加载的文件列表中已经存在的问题,已跳过加载", page.file_path);
+            eprintln!(
+                "加载文件{}时，遇到在已加载的文件列表中已经存在的问题,已跳过加载",
+                page.file_path
+            );
             return;
         }
 
         if self.uri_path_to_page_list.contains_key(&page.uri_path) {
-            eprintln!("加载文件{}时，遇到在已加载的页面路径列表中已经存在的问题，已跳过加载", page.file_path);
+            eprintln!(
+                "加载文件{}时，遇到在已加载的页面路径列表中已经存在的问题，已跳过加载",
+                page.file_path
+            );
             return;
         }
 
