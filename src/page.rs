@@ -24,8 +24,8 @@ impl Page {
 
     Page::build_response()已经可以自动按照html中的信息自动构建合适的Response
     */
-    pub fn new(file_path: &str) -> Page {
-        match load_file_by_file_path(file_path) {
+    pub fn new(file_path: &str, root_path: &str) -> Page {
+        match load_file_by_file_path(file_path, root_path) {
             Ok((uri_path, status_code, bytes)) => Page {
                 file_path: file_path.to_string(),
                 uri_path,
@@ -33,7 +33,10 @@ impl Page {
             },
             Err((status_code, message)) => Page {
                 file_path: file_path.to_string(),
-                uri_path: file_path.to_string(),
+                uri_path: file_path
+                    .trim_end_matches(".md")
+                    .trim_start_matches(root_path)
+                    .to_string(),
                 html: Err((status_code, message)),
             },
         }
@@ -98,6 +101,7 @@ impl Page {
 */
 fn load_file_by_file_path(
     file_path: &str,
+    root_path: &str,
 ) -> Result<(String, StatusCode, Bytes), (StatusCode, String)> {
     match read_to_string(Path::new(file_path)) {
         Ok(markdown) => {
@@ -116,9 +120,10 @@ fn load_file_by_file_path(
                         已经回退到默认的按文件路径挂载。"
                     );
 
-                    let path_without_extension = file_path.trim_end_matches(".md");
-
-                    format!("/{path_without_extension}")
+                    file_path
+                        .trim_end_matches(".md")
+                        .trim_start_matches(root_path)
+                        .to_string()
                 });
 
             let html = format!(

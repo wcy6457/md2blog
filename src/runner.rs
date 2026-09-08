@@ -31,11 +31,17 @@ impl Runner {
     }
 
     pub async fn run_server(runner: Runner) {
+        let port = runner
+            .page_manager_store
+            .get_config()
+            .get_port()
+            .to_string();
+        println!("服务器将加载在端口：{port}");
         let server = axum::serve(
-            match TcpListener::bind("0.0.0.0:2233").await {
+            match TcpListener::bind(format!("0.0.0.0:{port}")).await {
                 Ok(l) => l,
                 Err(e) => {
-                    eprintln!("发生了错误：{}", e.kind());
+                    eprintln!("发生了错误：{}", e);
                     exit(1);
                 }
             },

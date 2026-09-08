@@ -51,9 +51,11 @@ impl DualHashmap {
         }
 
         if self.uri_path_to_page_list.contains_key(&page.uri_path) {
+            let alive = self.uri_path_to_page_list.get(&page.uri_path).unwrap();
+
             eprintln!(
-                "加载文件{}时，遇到在已加载的页面路径列表中已经存在的问题，已跳过加载",
-                page.file_path
+                "加载文件 {} 时，遇到在已加载的页面路径列表中已经存在的问题，已跳过加载重复的uri_path为 {} ,与文件 {} 重复",
+                page.file_path, page.uri_path, alive.file_path
             );
             return;
         }
@@ -69,7 +71,7 @@ pub trait DualHashmapArcSwapExt {
     fn insert_by_page(&self, page: Page);
     fn get_page_by_uri_path(&self, uri_path: &str) -> Option<Arc<Page>>;
     fn get_page_by_file_path(&self, file_path: &str) -> Option<Arc<Page>>;
-    fn update_page_by_file_path(&self, file_path: &str) -> Result<(), String>;
+    fn update_page_by_file_path(&self, file_path: &str, root_path: &str) -> Result<(), String>;
 }
 impl DualHashmapArcSwapExt for ArcSwap<DualHashmap> {
     fn insert_by_page(&self, page: Page) {
@@ -98,7 +100,7 @@ impl DualHashmapArcSwapExt for ArcSwap<DualHashmap> {
     /**
     内部做大量“合规”验证的更新方法
     */
-    fn update_page_by_file_path(&self, file_path: &str) -> Result<(), String> {
+    fn update_page_by_file_path(&self, file_path: &str, root_path: &str) -> Result<(), String> {
         match self.get_page_by_file_path(file_path) {
             //1先查双重hashmap里有无关于这个文件路径的记录
             Some(page) => {
@@ -114,7 +116,7 @@ impl DualHashmapArcSwapExt for ArcSwap<DualHashmap> {
                             let mut dual_hashmap = DualHashmap::clone(dual_hashmap); //复制现在的样子
                             dual_hashmap.file_path_to_page_list.remove(file_path);
                             dual_hashmap.uri_path_to_page_list.remove(uri_path); //更新复制的里面的两个hashmap，移除相关记录
-                            dual_hashmap.insert_by_page(Arc::new(Page::new(file_path))); //对复制的加入新的实例
+                            dual_hashmap.insert_by_page(Arc::new(Page::new(file_path, root_path))); //对复制的加入新的实例
                             dual_hashmap //返回这个复制，完成rcu
                         });
                         Ok(())
@@ -128,7 +130,7 @@ impl DualHashmapArcSwapExt for ArcSwap<DualHashmap> {
             }
             None => {
                 //1没查到
-                let page = Page::new(file_path);
+                let page = Page::new(file_path, root_path);
                 match self.load().uri_path_to_page_list.get(&page.uri_path) {
                     //2直接建一个新的实例
                     Some(_) => Err(
