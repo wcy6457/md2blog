@@ -2,12 +2,16 @@
 name = "md2blog"
 version = "0.1.0"
 edition = "2024"
+license = "AGPL-3.0-only"
 
 [dependencies]
-axum = "0.8.9"
-comrak = "0.55.0"
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
+comrak = { version = "0.55.0", default-features = false }
 glob = "0.3.4"
-tokio = { version = "1.53.1", features = ["rt", "rt-multi-thread", "macros", "signal", "io-util", "io-std"] }
+tokio = { version = "1.53.1", features = ["rt-multi-thread", "macros", "net", "io-util", "io-std"] }
 arc-swap = "1.9.2"
-rust-yaml = { version = "1.1.0", features = ["serde"] }
+rust-yaml = { version = "1.1.0", default-features = false, features = ["serde"] }
 serde = { version = "1.0.229", features = ["derive"] }
+
+[profile.release]
+lto = true
