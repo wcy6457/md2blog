@@ -1,149 +1,53 @@
 use crate::page::Page;
-use arc_swap::ArcSwap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-type FilePathToPageList = HashMap<String, Arc<Page>>;
-type UriPathToPageList = HashMap<String, Arc<Page>>;
-
+/// 同一页面的文件路径索引和 URI 索引，所有修改都同时维护两个索引。
+#[derive(Clone, Default)]
 pub struct DualHashmap {
-    file_path_to_page_list: FilePathToPageList,
-    uri_path_to_page_list: UriPathToPageList,
+    file_path_to_page: HashMap<String, Arc<Page>>,
+    uri_path_to_page: HashMap<String, Arc<Page>>,
 }
 
-impl Clone for DualHashmap {
-    fn clone(&self) -> Self {
-        DualHashmap {
-            file_path_to_page_list: self.file_path_to_page_list.clone(),
-            uri_path_to_page_list: self.uri_path_to_page_list.clone(),
-        }
-    }
-}
-
-impl Default for DualHashmap {
-    fn default() -> Self {
-        Self::new()
-    }
+#[derive(Debug)]
+pub enum DualHashmapError {
+    DuplicateFile(String),
+    DuplicateUri { uri_path: String, file_path: String },
 }
 
 impl DualHashmap {
-    pub fn new() -> DualHashmap {
-        DualHashmap {
-            file_path_to_page_list: HashMap::new(),
-            uri_path_to_page_list: HashMap::new(),
-        }
+    pub fn new() -> Self {
+        Self::default()
     }
 
-    /**
-    同时按实例内容对两个hashmap同时插入的比较底层的方法，插入前会确认计划插入的key是否已被占用.
-
-    目前来看一般只应该在服务器第一次启动的时候、重新遍历加载markdown的时候调用或被其他封装好的类调用
-
-    Date：2026.9.3
-    */
-    pub fn insert_by_page(&mut self, page: Arc<Page>) {
-        if self.file_path_to_page_list.contains_key(&page.file_path) {
-            eprintln!(
-                "加载文件{}时，遇到在已加载的文件列表中已经存在的问题,已跳过加载",
-                page.file_path
-            );
-            return;
+    /// 冲突时不修改任何索引，由调用方决定如何处理错误。
+    pub fn insert_by_page(&mut self, page: Arc<Page>) -> Result<(), DualHashmapError> {
+        if self.file_path_to_page.contains_key(&page.file_path) {
+            return Err(DualHashmapError::DuplicateFile(page.file_path.clone()));
         }
-
-        if self.uri_path_to_page_list.contains_key(&page.uri_path) {
-            let alive = self.uri_path_to_page_list.get(&page.uri_path).unwrap();
-
-            eprintln!(
-                "加载文件 {} 时，遇到在已加载的页面路径列表中已经存在的问题，已跳过加载重复的uri_path为 {} ,与文件 {} 重复",
-                page.file_path, page.uri_path, alive.file_path
-            );
-            return;
+        if let Some(existing) = self.uri_path_to_page.get(&page.uri_path) {
+            return Err(DualHashmapError::DuplicateUri {
+                uri_path: page.uri_path.clone(),
+                file_path: existing.file_path.clone(),
+            });
         }
-
-        self.file_path_to_page_list
+        self.file_path_to_page
             .insert(page.file_path.clone(), Arc::clone(&page));
-        self.uri_path_to_page_list
-            .insert(page.uri_path.clone(), Arc::clone(&page));
-    }
-}
-
-pub trait DualHashmapArcSwapExt {
-    fn insert_by_page(&self, page: Page);
-    fn get_page_by_uri_path(&self, uri_path: &str) -> Option<Arc<Page>>;
-    fn get_page_by_file_path(&self, file_path: &str) -> Option<Arc<Page>>;
-    fn update_page_by_file_path(&self, file_path: &str, root_path: &str) -> Result<(), String>;
-}
-impl DualHashmapArcSwapExt for ArcSwap<DualHashmap> {
-    fn insert_by_page(&self, page: Page) {
-        let page = Arc::new(page);
-        self.rcu(|dual_hashmap| {
-            let mut dual_hashmap = DualHashmap::clone(dual_hashmap);
-            dual_hashmap.insert_by_page(Arc::clone(&page));
-            dual_hashmap
-        });
+        self.uri_path_to_page.insert(page.uri_path.clone(), page);
+        Ok(())
     }
 
-    fn get_page_by_uri_path(&self, uri_path: &str) -> Option<Arc<Page>> {
-        match self.load().uri_path_to_page_list.get(uri_path) {
-            Some(s) => Some(Arc::clone(s)),
-            None => None,
-        }
+    pub fn get_page_by_uri_path(&self, uri_path: &str) -> Option<Arc<Page>> {
+        self.uri_path_to_page.get(uri_path).cloned()
     }
 
-    fn get_page_by_file_path(&self, file_path: &str) -> Option<Arc<Page>> {
-        match self.load().file_path_to_page_list.get(file_path) {
-            Some(s) => Some(Arc::clone(s)),
-            None => None,
-        }
+    pub fn get_page_by_file_path(&self, file_path: &str) -> Option<Arc<Page>> {
+        self.file_path_to_page.get(file_path).cloned()
     }
 
-    /**
-    内部做大量“合规”验证的更新方法
-    */
-    fn update_page_by_file_path(&self, file_path: &str, root_path: &str) -> Result<(), String> {
-        match self.get_page_by_file_path(file_path) {
-            //1先查双重hashmap里有无关于这个文件路径的记录
-            Some(page) => {
-                //1查到了,已登记
-                let uri_path = &page.uri_path; //1从查到的实例里取出uri_path，那就是自己的旧路径
-
-                match self.load().uri_path_to_page_list.get(uri_path) {
-                    //2再从前面的uri_path查另外一个hashmap有无记录
-                    Some(_) => {
-                        //2查到了
-                        self.rcu(|dual_hashmap| {
-                            //两个hashmap都查到了开始对咱们这个ArcSwap做rcu
-                            let mut dual_hashmap = DualHashmap::clone(dual_hashmap); //复制现在的样子
-                            dual_hashmap.file_path_to_page_list.remove(file_path);
-                            dual_hashmap.uri_path_to_page_list.remove(uri_path); //更新复制的里面的两个hashmap，移除相关记录
-                            dual_hashmap.insert_by_page(Arc::new(Page::new(file_path, root_path))); //对复制的加入新的实例
-                            dual_hashmap //返回这个复制，完成rcu
-                        });
-                        Ok(())
-                    }
-                    None => Err(
-                        //2没查到          目前来看恐怕真的是预料不到的错误了吧。。。Date：2026.9.3
-                        "发生了未知的意外，这一定是因为异步操作的bug导致的。请反馈开发者。"
-                            .to_string(),
-                    ),
-                }
-            }
-            None => {
-                //1没查到
-                let page = Page::new(file_path, root_path);
-                match self.load().uri_path_to_page_list.get(&page.uri_path) {
-                    //2直接建一个新的实例
-                    Some(_) => Err(
-                        //但是查到了
-                        "正在载入的文件所配置的uri_path已经存在页面，服务器拒绝加载！".to_string(),
-                    ),
-                    None => {
-                        //没查到才能插入
-                        self.insert_by_page(page);
-                        Ok(())
-                    }
-                }
-            }
-        }
+    pub fn remove_by_file_path(&mut self, file_path: &str) -> Option<Arc<Page>> {
+        let page = self.file_path_to_page.remove(file_path)?;
+        self.uri_path_to_page.remove(&page.uri_path);
+        Some(page)
     }
 }
