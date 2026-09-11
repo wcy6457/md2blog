@@ -92,14 +92,14 @@ impl Runner {
                 .get_page_by_uri_path(uri.path())
             {
                 Some(page) => page.build_response().await,
-                None => Page::build_404_response(),
+                None => Page::build_404_response().await,
             }
         }
 
         async fn fallback(_: Uri, State(app_state): State<AppState>) -> Response<Body> {
             match app_state.page_manager_store.get_page_by_uri_path("/") {
                 Some(page) => page.build_response().await,
-                None => Page::build_404_response(),
+                None => Page::build_404_response().await,
             }
         }
     }

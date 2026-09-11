@@ -18,6 +18,11 @@ pub struct Page {
     pub html: Result<(StatusCode, Bytes), (StatusCode, String)>,
 }
 
+#[derive(serde::Deserialize, Clone)]
+struct PageConfig {
+    uri_path: Option<String>,
+}
+
 impl Page {
     pub fn build(file_path: &str, root_path: &str) -> Result<Page, String> {
         let temp_page = Self::new(file_path, root_path);
@@ -42,17 +47,20 @@ impl Page {
     */
     fn new(file_path: &str, root_path: &str) -> Page {
         match load_file_by_file_path(file_path, root_path) {
-            Ok((uri_path, status_code, bytes)) => Page {
+            Ok((page_config, status_code, bytes)) => Page {
                 file_path: file_path.to_string(),
-                uri_path,
+                uri_path: match page_config.uri_path {
+                    Some(path) => path,
+                    None => file_path_into_uri_path(file_path, root_path),
+                },
                 html: Ok((status_code, bytes)),
             },
-            Err((status_code, message)) => Page {
+            Err((page_config, status_code, message)) => Page {
                 file_path: file_path.to_string(),
-                uri_path: file_path
-                    .trim_end_matches(".md")
-                    .trim_start_matches(root_path)
-                    .to_string(),
+                uri_path: match page_config.uri_path {
+                    Some(path) => path,
+                    None => file_path_into_uri_path(file_path, root_path),
+                },
                 html: Err((status_code, message)),
             },
         }
@@ -90,7 +98,7 @@ impl Page {
             .unwrap()
     }
 
-    pub fn build_404_response() -> Response {
+    pub async fn build_404_response() -> Response {
         Response::builder()
             .status(StatusCode::NOT_FOUND)
             .header("content-type", "text/html; charset=utf-8")
@@ -105,65 +113,115 @@ impl Page {
 # 返回值
 
 - 成功时返回：
-  `Ok((uri_path, StatusCode::OK, html_bytes))`
-  - `uri_path`：Markdown 中配置的访问路径；未配置时根据文件路径生成。
-  - `StatusCode::OK`：HTTP 200 状态码。
-  - `html_bytes`：转换后完整 HTML 页面的字节数据。
+  `Ok((PageConfig, StatusCode::OK, html_bytes))`
+  - `PageConfig`： 目前只包含uri_path。
+  - `StatusCode::OK`： HTTP 200 状态码。
+  - `html_bytes`： 转换后完整 HTML 页面的字节数据。
 
 - 失败时返回：
-  `Err((StatusCode::INTERNAL_SERVER_ERROR, error_message))`
-  - `StatusCode::INTERNAL_SERVER_ERROR`：HTTP 500 状态码。
-  - `error_message`：读取文件时产生的错误信息。
+  `Err((PageConfig, StatusCode::INTERNAL_SERVER_ERROR, error_message))`
+  - `PageConfig`： 目前只包含uri_path
+  - `StatusCode::INTERNAL_SERVER_ERROR`： HTTP 500 状态码。
+  - `error_message`： 读取文件时产生的错误信息。
 */
 fn load_file_by_file_path(
     file_path: &str,
     root_path: &str,
-) -> Result<(String, StatusCode, Bytes), (StatusCode, String)> {
-    match read_to_string(Path::new(file_path)) {
-        Ok(markdown) => {
-            let uri_path = markdown
-                .lines()
-                .find(|line| line.contains("uri_path:"))
-                .map(|line| {
-                    line.trim()
-                        .trim_start_matches("uri_path:")
-                        .trim()
-                        .to_string()
-                })
-                .unwrap_or_else(|| {
-                    eprintln!(
-                        "在 {file_path} 中找不到关于 uri_path 的设置。\
-                        已经回退到默认的按文件路径挂载。"
-                    );
+) -> Result<(PageConfig, StatusCode, Bytes), (PageConfig, StatusCode, String)> {
+    let uri_path = file_path_into_uri_path(file_path, root_path);
 
-                    file_path
-                        .trim_end_matches(".md")
-                        .trim_start_matches(root_path)
-                        .to_string()
-                });
-
-            let html = format!(
-                r#"<!doctype html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" href="/test/style.css">
-</head>
-<body>
-    <main class="markdown-body">{}</main>
-</body>
-</html>"#,
-                markdown_to_html(&markdown, &Options::default())
-            );
-
-            Ok((uri_path, StatusCode::OK, Bytes::from(html)))
+    return match read_to_string(Path::new(&file_path)) {
+        //能不能读文件？
+        Ok(file) => {
+            if file.starts_with("<!--") {
+                //进入就是可能有配置块
+                match file.find("-->") {
+                    Some(index) => {
+                        //有配置块
+                        let yaml = &file[4..index];
+                        let html = build_html_bytes(&file[(index + 3)..]);
+                        match rust_yaml::serde_integration::from_str::<PageConfig>(yaml) {
+                            Ok(yaml) => Ok((yaml, StatusCode::OK, html)),
+                            Err(e) => {
+                                //配置错误
+                                eprintln!(
+                                    "加载 {file_path} 中的配置出错。\
+                                 将挂载为内部服务器错误。\
+                                 错误原因： {e}"
+                                );
+                                Err((
+                                    PageConfig {
+                                        uri_path: Some(uri_path),
+                                    },
+                                    StatusCode::INTERNAL_SERVER_ERROR,
+                                    e.to_string(),
+                                ))
+                            }
+                        }
+                    }
+                    None => {
+                        //无配置块，返回和file_path相同的路径
+                        eprintln!(
+                            "在 {file_path} 中发现未闭合的html注释内容！将挂载为内部服务器错误。"
+                        );
+                        Err((
+                            PageConfig {
+                                uri_path: Some(uri_path),
+                            },
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "未闭合的html注释内容！".to_string(),
+                        ))
+                    }
+                }
+            } else {
+                //无配置块，返回和file_path相同的路径
+                eprintln!(
+                    "在 {file_path} 中找不到关于 uri_path 的设置。\
+                                 已经回退到默认的按文件路径挂载。"
+                );
+                Ok((
+                    PageConfig {
+                        uri_path: Some(uri_path),
+                    },
+                    StatusCode::OK,
+                    build_html_bytes(&file),
+                ))
+            }
         }
-
         Err(error) => {
             eprintln!("在读取文件 {file_path} 时发生了错误：{error}");
 
-            Err((StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))
+            Err((
+                PageConfig {
+                    uri_path: Some(uri_path),
+                },
+                StatusCode::INTERNAL_SERVER_ERROR,
+                error.to_string(),
+            ))
         }
+    };
+
+    fn build_html_bytes(html: &str) -> Bytes {
+        Bytes::from(format!(
+            r#"<!doctype html>
+             <html lang="zh-CN">
+             <head>
+                 <meta charset="UTF-8">
+                 <meta name="viewport" content="width=device-width, initial-scale=1">
+                 <link rel="stylesheet" href="/test/style.css">
+             </head>
+             <body>
+                 <main class="markdown-body">{}</main>
+             </body>
+             </html>"#,
+            markdown_to_html(html, &Options::default())
+        ))
     }
+}
+
+fn file_path_into_uri_path(file_path: &str, root_path: &str) -> String {
+    file_path
+        .trim_end_matches(".md")
+        .trim_start_matches(root_path)
+        .to_string()
 }

@@ -85,8 +85,21 @@ fn load_pages_from_disk(root_path: &str) -> DualHashmap {
                 match Page::build(&file_path, root_path) {
                     Ok(page) => {
                         let page = Arc::new(page);
-                        match dual_hashmap.insert_by_page(page) {
-                            Ok(()) => {}
+                        match dual_hashmap.insert_by_page(Arc::clone(&page)) {
+                            Ok(()) => match &page.html {
+                                Ok(_) => {
+                                    println!(
+                                        "已成功加载文件 {file_path} , 挂载在 {}",
+                                        page.uri_path
+                                    )
+                                }
+                                Err((_, message)) => {
+                                    println!(
+                                        "已成功加载失败页面：文件：{file_path} , 挂载在 {}, 原因：{}",
+                                        page.uri_path, message
+                                    )
+                                }
+                            },
                             Err(e) => {
                                 let e: PageManagerError = e.into();
                                 if let PageManagerError::Message(message) = e {
@@ -207,7 +220,7 @@ mod tests {
 
         fn write(&self, name: &str, route: &str) -> String {
             let path = self.0.join(name);
-            std::fs::write(&path, format!("uri_path: {route}\n# {name}")).unwrap();
+            std::fs::write(&path, format!("<!--\nuri_path: {route}\n-->\n# {name}")).unwrap();
             path.to_str().unwrap().replace('\\', "/")
         }
 
@@ -296,7 +309,7 @@ mod tests {
             &manager.get_page_by_file_path(&file).unwrap()
         ));
 
-        std::fs::write(&file, "uri_path: /new\n# Updated content").unwrap();
+        std::fs::write(&file, "<!--\nuri_path: /new\n-->\n# Updated content").unwrap();
         manager.update_page_by_file_path(&file).unwrap();
         let updated = manager.get_page_by_uri_path("/new").unwrap();
         assert!(!Arc::ptr_eq(&page, &updated));
