@@ -1,4 +1,4 @@
-use crate::page_manager::{PageManager, PageManagerStoreExt};
+use crate::page_manager::{PageManager, PageManagerError, PageManagerStoreExt};
 use arc_swap::ArcSwap;
 use std::sync::Arc;
 use tokio::io::{self, AsyncBufReadExt, BufReader};
@@ -39,7 +39,17 @@ impl CommandHandler {
             println!("正在重新加载文件{file_path}......");
             match self.page_manager_store.update_page_by_file_path(file_path) {
                 Ok(_) => (),
-                Err(e) => eprintln!("{}", e),
+                Err(e) => match e {
+                    PageManagerError::Message(message) => {
+                        eprintln!("{}", message);
+                    }
+                    PageManagerError::UriPath(uri_path) => {
+                        eprintln!(
+                            "加载文件 {} 时，路由 {} 属于保留路由，已跳过加载",
+                            file_path, uri_path
+                        );
+                    }
+                },
             };
             false
         } else if command == "refresh" {

@@ -17,14 +17,30 @@ pub struct Page {
     pub uri_path: String,
     pub html: Result<(StatusCode, Bytes), (StatusCode, String)>,
 }
+
 impl Page {
+    pub fn build(file_path: &str, root_path: &str) -> Result<Page, String> {
+        let temp_page = Self::new(file_path, root_path);
+        if temp_page.uri_path.eq("/admin")
+            || temp_page.uri_path.eq("/api")
+            || temp_page.uri_path.starts_with("/admin/")
+            || temp_page.uri_path.starts_with("/api/")
+        {
+            return Err(temp_page.uri_path);
+        }
+        Ok(temp_page)
+    }
+
     /**
+    目前视为底层方法，创建page应该通过build方法。
+
+
     已经自带错误处理，错误信息会被保存在结构体的html中。
 
 
     Page::build_response()已经可以自动按照html中的信息自动构建合适的Response
     */
-    pub fn new(file_path: &str, root_path: &str) -> Page {
+    fn new(file_path: &str, root_path: &str) -> Page {
         match load_file_by_file_path(file_path, root_path) {
             Ok((uri_path, status_code, bytes)) => Page {
                 file_path: file_path.to_string(),
